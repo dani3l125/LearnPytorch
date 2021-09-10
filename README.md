@@ -1,1 +1,1 @@
-LearnPytorch
+LearningPytorch
