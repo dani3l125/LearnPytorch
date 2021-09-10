@@ -13,18 +13,21 @@ from torch.utils.data import DataLoader
 
 # Hyperparmeters
 batch_size = 100
-learning_rate = 0.001
-epochs = 5
-lr = 0.001
+learning_rate = 0.003
+epochs = 50
+
 
 # Other constants
-input_size = 32*32
+input_size = 32*32*3
 num_classes = 10
 
 # Download dataset and split for validation
 dataset = CIFAR10(root='data/', train=True, transform=transforms.ToTensor(), download=True)
 test_ds = CIFAR10(root='data/', train=False, transform=transforms.ToTensor(), download=True)
 train_ds, val_ds = random_split(dataset, [40000, 10000])
+
+train_subset = DataLoader(train_ds, batch_size, shuffle=True)
+val_subset = DataLoader(val_ds, batch_size, shuffle=True)
 
 # Define accuracy function (for programmer):
 def accuracy(outputs, labels):
@@ -39,7 +42,7 @@ class CifarModel(nn.Module):
 
     def forward(self, xb):
         xb = xb.reshape(-1, input_size)
-        #xb = torch.flatten(xb)
+        # try : xb = torch.flatten(xb)
         out = self.linear(xb)
         return out
 
@@ -69,8 +72,9 @@ class CifarModel(nn.Module):
 model = CifarModel()
 
 # Training functions:
-train_subset = DataLoader(train_ds, batch_size, shuffle=True)
-val_subset = DataLoader(val_ds, batch_size, shuffle=True)
+
+
+count = 0
 
 def evaluate(model, val_subset):
     outputs = [model.validation_step(batch) for batch in val_subset]
@@ -92,9 +96,11 @@ def fit(epochs, lr, model, train_subset, val_subset, opt_func=torch.optim.SGD):
         history.append(result)
     return history
 
-history = fit(epochs, lr, model, train_subset, val_subset)
 
+history = fit(epochs, learning_rate, model, train_subset, val_subset)
 
 print(history)
-# TODO: understand batch
+
+
+
 
