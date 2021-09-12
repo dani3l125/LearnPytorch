@@ -12,21 +12,18 @@ from torchvision.datasets import CIFAR10
 from torch.utils.data import random_split
 from torch.utils.data import DataLoader
 
-dtype = torch.cuda.FloatTensor
 cudnn.benchmark = True
-
 
 # Hyperparmeters
 batch_size = 100
-learning_rate1 = 0.01
-learning_rate2 = 0.003
-epochs1 = 7
-epochs2 = 10
+learning_rate = 0.0007
+epochs = 10
 
 # Other constants
 input_size = 32*32*3
 hidden_size = 64
 num_classes = 10
+classes = ['test', 'train', 'bird', 'ship', 'dog', 'frog', 'horse', 'automobile', 'airplane', 'truck', 'cat', 'deer']
 
 # Computing on GPU if possible
 def get_default_device():
@@ -78,16 +75,34 @@ def accuracy(outputs, labels):
 class CifarModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.linear1 = nn.Linear(input_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, num_classes)
+        self.network = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # output: 64 x 16 x 16
+
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # output: 128 x 8 x 8
+
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),  # output: 256 x 4 x 4
+
+            nn.Flatten(),
+            nn.Linear(256 * 4 * 4, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10))
 
     def forward(self, xb):
-        xb = xb.view(xb.size(0), -1)
-        out = self.linear1(xb)
-        # activate function:
-        out = F.relu(out)
-        out = self.linear2(out)
-        return out
+        return self.network(xb)
 
     def training_step(self, batch):
         images, labels = batch
@@ -118,6 +133,7 @@ to_device(model, get_default_device())
 # Training functions:
 
 def evaluate(model, val_dl):
+    model.eval()
     outputs = [model.validation_step(batch) for batch in val_dl]
     return model.validation_epoch_end(outputs)
 
@@ -125,15 +141,18 @@ def fit(epochs, lr, model, train_dl, val_dl, opt_func=torch.optim.SGD):
     history = []
     optimizer = opt_func(model.parameters(), lr)
     for epoch in range(epochs):
+        model.train()
+        train_losses = []
         # Training Phase
         for batch in train_dl:
-
             loss = model.training_step(batch)
+            train_losses.append(loss)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
         # Validation phase
         result = evaluate(model, val_dl)
+        result['train_loss'] = torch.stack(train_losses).mean().item()
         model.epoch_end(epoch, result)
         history.append(result)
     return history
@@ -145,16 +164,21 @@ def predict_image(img, model):
     _, preds  = torch.max(yb, dim=1)
     return preds[0].item()
 
-history = fit(epochs1, learning_rate1, model, train_dl, val_dl)
-history += fit(epochs2, learning_rate2, model, train_dl, val_dl)
-
-
-# example
-img, label = test_ds[0]
-plt.imshow(img[0], cmap='gray')
-print('Label:', label, ', Predicted:', predict_image(img, model))
+history = fit(epochs, learning_rate, model, train_dl, val_dl, torch.optim.Adam)
 
 print(history)
+
+# examples
+print("insert number: ")
+num = int(input())
+while num != -1:
+    img, label = test_ds[num]
+    plt.imshow(img.permute(1, 2, 0))
+    plt.show()
+    print('Label:', classes[label], ', Predicted:', classes[predict_image(img, model)])
+    print("insert number: ")
+    num = int(input())
+
 
 
 
